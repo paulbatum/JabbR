@@ -124,6 +124,8 @@ namespace JabbR
             var messageViewModel = new MessageViewModel(chatMessage);
             Clients[room.Name].addMessage(messageViewModel, room.Name);
 
+            _repository.CommitChanges();
+
             if (!links.Any())
             {
                 return;
@@ -224,7 +226,7 @@ namespace JabbR
             }
 
             user.Status = (int)UserStatus.Offline;
-            _repository.Update();
+            _repository.CommitChanges();
         }
 
         private void Initialize(ChatUser user, IEnumerable<ChatRoom> rooms)
@@ -261,6 +263,8 @@ namespace JabbR
             _service.UpdateActivity(user);
 
             OnUpdateActivity(user, room);
+
+            _repository.CommitChanges();
         }
 
         private void ProcessUrls(IEnumerable<string> links, ChatRoom room, ChatMessage chatMessage)
@@ -288,9 +292,12 @@ namespace JabbR
 
                     // If we did get something, update the message and notify all clients
                     chatMessage.Content += extractedContent;
-                    _repository.Update();
 
+                    // Notify the room
                     Clients[room.Name].addMessageContent(chatMessage.Id, extractedContent, room.Name);
+
+                    // Commit the changes
+                    _repository.CommitChanges();                    
                 }
             });
         }
