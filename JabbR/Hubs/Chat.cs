@@ -76,10 +76,6 @@ namespace JabbR
 
         private void OnUserInitialize(ClientState clientState, ChatUser user)
         {
-            // Update the client state
-            Caller.id = user.Id;
-            Caller.name = user.Name;
-
             // Update the active room on the client (only if it's still a valid room)
             if (user.Rooms.Any(room => room.Name.Equals(clientState.ActiveRoom, StringComparison.OrdinalIgnoreCase)))
             {
@@ -87,7 +83,7 @@ namespace JabbR
                 Caller.activeRoom = clientState.ActiveRoom;
             }
 
-            Initialize(user, user.Rooms);
+            Initialize(user);
         }
 
         public void Send(string content)
@@ -219,22 +215,19 @@ namespace JabbR
                 return;
             }
 
-            // Leave all rooms
-            foreach (var room in user.Rooms)
-            {
-                LeaveRoom(user, room);
-            }
-
-            user.Status = (int)UserStatus.Offline;
-            _repository.CommitChanges();
+            LeaveAllRooms(user);
         }
 
-        private void Initialize(ChatUser user, IEnumerable<ChatRoom> rooms)
+        private void Initialize(ChatUser user)
         {
+            // Update the client state
+            Caller.id = user.Id;
+            Caller.name = user.Name;
+
             var userViewModel = new UserViewModel(user);
             var roomNames = new List<string>();
 
-            foreach (var room in rooms)
+            foreach (var room in user.Rooms)
             {
                 var isOwner = user.OwnedRooms.Contains(room);
 
@@ -297,7 +290,7 @@ namespace JabbR
                     Clients[room.Name].addMessageContent(chatMessage.Id, extractedContent, room.Name);
 
                     // Commit the changes
-                    _repository.CommitChanges();                    
+                    _repository.CommitChanges();
                 }
             });
         }
@@ -312,10 +305,27 @@ namespace JabbR
             return commandManager.TryHandleCommand(command);
         }
 
+        private void LeaveAllRooms(ChatUser user)
+        {
+            // Leave all rooms
+            foreach (var room in user.Rooms)
+            {
+                LeaveRoom(user, room);
+            }
+
+            user.Status = (int)UserStatus.Offline;
+            _repository.CommitChanges();
+        }
+
         private void OnUpdateActivity(ChatUser user, ChatRoom room)
         {
             var userViewModel = new UserViewModel(user);
             Clients[room.Name].updateActivity(userViewModel, room.Name);
+        }
+
+        void INotificationService.Initialize(ChatUser user)
+        {
+            Initialize(user);
         }
 
         void INotificationService.ChangePassword()
@@ -427,6 +437,16 @@ namespace JabbR
             Caller.showUsersInRoom(room.Name, names);
         }
 
+        void INotificationService.LogOut(ChatUser user)
+        {
+            // Leave all rooms and mark the user as offline
+            LeaveAllRooms(user);
+
+            var rooms = user.Rooms.Select(r => r.Name);
+
+            Caller.logOut(rooms);
+        }
+
         void INotificationService.ShowHelp()
         {
             Caller.showCommands(new[] { 
@@ -484,7 +504,7 @@ namespace JabbR
             LeaveRoom(user, room);
         }
 
-        void INotificationService.OnUserNameChanged(ChatUser user, string newUserName, string oldUserName)
+        void INotificationService.OnUserNameChanged(ChatUser user, string oldUserName, string newUserName)
         {
             // Create the view model
             var userViewModel = new UserViewModel(user);
