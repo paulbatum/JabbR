@@ -320,12 +320,12 @@ namespace JabbR
 
         void INotificationService.ChangePassword()
         {
-            throw new NotImplementedException();
+            Caller.changePassword();
         }
 
         void INotificationService.SetPassword()
         {
-            throw new NotImplementedException();
+            Caller.setPassword();
         }
 
         void INotificationService.KickUser(ChatRoom room, ChatUser targetUser)
