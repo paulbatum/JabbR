@@ -68,6 +68,7 @@ namespace JabbR
             // Update some user values
             user.ClientId = Context.ClientId;
             _service.UpdateActivity(user);
+            _repository.CommitChanges();
 
             OnUserInitialize(clientState, user);
 
@@ -255,9 +256,9 @@ namespace JabbR
         {
             _service.UpdateActivity(user);
 
-            OnUpdateActivity(user, room);
-
             _repository.CommitChanges();
+
+            OnUpdateActivity(user, room);
         }
 
         private void ProcessUrls(IEnumerable<string> links, ChatRoom room, ChatMessage chatMessage)
@@ -338,17 +339,25 @@ namespace JabbR
             Caller.setPassword();
         }
 
-        void INotificationService.KickUser(ChatRoom room, ChatUser targetUser)
+        void INotificationService.KickUser(ChatUser targetUser, ChatRoom room)
         {
             // Kick the user from this room
             Clients[targetUser.ClientId].kick(room.Name);
+
+            // Remove the user from this the room group so he doesn't get the leave message
+            GroupManager.RemoveFromGroup(targetUser.ClientId, room.Name).Wait();
+
+            // Tell the room the user left
+            LeaveRoom(targetUser, room);
         }
 
         void INotificationService.OnUserCreated(ChatUser user)
         {
+            // Set some client state
             Caller.name = user.Name;
             Caller.id = user.Id;
 
+            // Tell the client a user was created
             Caller.userCreated();
         }
 
@@ -357,12 +366,12 @@ namespace JabbR
             var userViewModel = new UserViewModel(user);
             var isOwner = user.OwnedRooms.Contains(room);
 
-            // Tell the people in this room that you've joined
-            Clients[room.Name].addUser(userViewModel, room.Name, isOwner).Wait();
-
             // Set the room on the caller
             Caller.activeRoom = room.Name;
             Caller.joinRoom(room.Name);
+
+            // Tell the people in this room that you've joined
+            Clients[room.Name].addUser(userViewModel, room.Name, isOwner).Wait();
 
             // Notify users of the room count change
             OnRoomCountChanged(room);
