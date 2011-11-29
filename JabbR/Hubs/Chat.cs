@@ -121,7 +121,8 @@ namespace JabbR
 
             ChatMessage chatMessage = _service.AddMessage(user, room, messageText);
 
-            AddMessage(room, chatMessage);
+            var messageViewModel = new MessageViewModel(chatMessage);
+            Clients[room.Name].addMessage(messageViewModel, room.Name);
 
             if (!links.Any())
             {
@@ -203,7 +204,8 @@ namespace JabbR
                 UpdateActivity(user, room);
             }
 
-            OnTyping(isTyping, user, room);
+            var userViewModel = new UserViewModel(user);
+            Clients[room.Name].setTyping(userViewModel, room.Name, isTyping);
         }
 
         private void Disconnect(string clientId)
@@ -303,23 +305,29 @@ namespace JabbR
             return commandManager.TryHandleCommand(command);
         }
 
-        public void ChangePassword()
+        private void OnUpdateActivity(ChatUser user, ChatRoom room)
+        {
+            var userViewModel = new UserViewModel(user);
+            Clients[room.Name].updateActivity(userViewModel, room.Name);
+        }
+
+        void INotificationService.ChangePassword()
         {
             throw new NotImplementedException();
         }
 
-        public void SetPassword()
+        void INotificationService.SetPassword()
         {
             throw new NotImplementedException();
         }
 
-        public void KickUser(ChatRoom room, ChatUser targetUser)
+        void INotificationService.KickUser(ChatRoom room, ChatUser targetUser)
         {
             // Kick the user from this room
             Clients[targetUser.ClientId].kick(room.Name);
         }
 
-        public void OnUserCreated(ChatUser user)
+        void INotificationService.OnUserCreated(ChatUser user)
         {
             Caller.name = user.Name;
             Caller.id = user.Id;
@@ -327,13 +335,7 @@ namespace JabbR
             Caller.userCreated();
         }
 
-        public void AddMessage(ChatRoom room, ChatMessage chatMessage)
-        {
-            var messageViewModel = new MessageViewModel(chatMessage);
-            Clients[room.Name].addMessage(messageViewModel, room.Name);
-        }
-
-        public void JoinRoom(ChatUser user, ChatRoom room)
+        void INotificationService.JoinRoom(ChatUser user, ChatRoom room)
         {
             var userViewModel = new UserViewModel(user);
             var isOwner = user.OwnedRooms.Contains(room);
@@ -352,13 +354,7 @@ namespace JabbR
             AddToGroup(room.Name).Wait();
         }
 
-        private void OnUpdateActivity(ChatUser user, ChatRoom room)
-        {
-            var userViewModel = new UserViewModel(user);
-            Clients[room.Name].updateActivity(userViewModel, room.Name);
-        }
-
-        public void OnOwnerAdded(ChatUser targetUser, ChatRoom targetRoom)
+        void INotificationService.OnOwnerAdded(ChatUser targetUser, ChatRoom targetRoom)
         {
             // Tell this client it's an owner
             Clients[targetUser.ClientId].makeOwner(targetRoom.Name);
@@ -376,7 +372,7 @@ namespace JabbR
             Caller.ownerMade(targetUser.Name, targetRoom.Name);
         }
 
-        public void ChangeGravatar(ChatUser user)
+        void INotificationService.ChangeGravatar(ChatUser user)
         {
             // Create the view model
             var userViewModel = new UserViewModel(user);
@@ -391,46 +387,40 @@ namespace JabbR
             }
         }
 
-        public void OnSelfMessage(ChatRoom room, ChatUser user, string content)
+        void INotificationService.OnSelfMessage(ChatRoom room, ChatUser user, string content)
         {
             Clients[room.Name].sendMeMessage(user.Name, content);
         }
 
-        public void OnTyping(bool isTyping, ChatUser user, ChatRoom room)
-        {
-            var userViewModel = new UserViewModel(user);
-            Clients[room.Name].setTyping(userViewModel, room.Name, isTyping);
-        }
-
-        public void SendPrivateMessage(ChatUser user, ChatUser toUser, string messageText)
+        void INotificationService.SendPrivateMessage(ChatUser user, ChatUser toUser, string messageText)
         {
             // Send a message to the sender and the sendee
             Clients[toUser.ClientId].sendPrivateMessage(user.Name, toUser.Name, messageText);
             Caller.sendPrivateMessage(user.Name, toUser.Name, messageText);
         }
 
-        public void ListRooms(ChatUser user)
+        void INotificationService.ListRooms(ChatUser user)
         {
             Caller.showUsersRoomList(user.Name, user.Rooms.Select(r => r.Name));
         }
 
-        public void ListUsers()
+        void INotificationService.ListUsers()
         {
             var users = _repository.Users.Online().Select(s => s.Name);
             Caller.listUsers(users);
         }
 
-        public void ListUsers(IEnumerable<ChatUser> users)
+        void INotificationService.ListUsers(IEnumerable<ChatUser> users)
         {
             Caller.listUsers(users.Select(s => s.Name));
         }
 
-        public void ListUsers(ChatRoom room, IEnumerable<string> names)
+        void INotificationService.ListUsers(ChatRoom room, IEnumerable<string> names)
         {
             Caller.showUsersInRoom(room.Name, names);
         }
 
-        public void ShowHelp()
+        void INotificationService.ShowHelp()
         {
             Caller.showCommands(new[] { 
                 new { Name = "help", Description = "Shows the list of commands" },
@@ -448,8 +438,8 @@ namespace JabbR
                 new { Name = "kick", Description = "Type /kick [user] to kick a user from the room. Note, this is only valid for owners of the room." }
             });
         }
-        
-        public void ShowRooms()
+
+        void INotificationService.ShowRooms()
         {
             var rooms = _repository.Rooms.Select(r => new
             {
@@ -460,19 +450,19 @@ namespace JabbR
             Caller.showRooms(rooms);
         }
 
-        public void NugeUser(ChatUser user, ChatUser toUser)
+        void INotificationService.NugeUser(ChatUser user, ChatUser toUser)
         {
             // Send a nudge message to the sender and the sendee
             Clients[toUser.ClientId].nudge(user.Name, toUser.Name);
             Caller.sendPrivateMessage(user.Name, toUser.Name, "nudged " + toUser.Name);
         }
 
-        public void NudgeRoom(ChatRoom room, ChatUser user)
+        void INotificationService.NudgeRoom(ChatRoom room, ChatUser user)
         {
             Clients[room.Name].nudge(user.Name);
         }
 
-        public void LeaveRoom(ChatUser user, ChatRoom room)
+        private void LeaveRoom(ChatUser user, ChatRoom room)
         {
             var userViewModel = new UserViewModel(user);
             Clients[room.Name].leave(userViewModel, room.Name).Wait();
@@ -482,13 +472,12 @@ namespace JabbR
             OnRoomCountChanged(room);
         }
 
-        public void OnRoomCountChanged(ChatRoom room)
+        void INotificationService.LeaveRoom(ChatUser user, ChatRoom room)
         {
-            // Update the room count
-            Clients.updateRoomCount(room.Name, room.Users.Online().Count());
+            LeaveRoom(user, room);
         }
 
-        public void OnUserNameChanged(ChatUser user, string newUserName, string oldUserName)
+        void INotificationService.OnUserNameChanged(ChatUser user, string newUserName, string oldUserName)
         {
             // Create the view model
             var userViewModel = new UserViewModel(user);
@@ -502,6 +491,12 @@ namespace JabbR
             {
                 Clients[room.Name].changeUserName(oldUserName, userViewModel, room.Name);
             }
+        }
+
+        private void OnRoomCountChanged(ChatRoom room)
+        {
+            // Update the room count
+            Clients.updateRoomCount(room.Name, room.Users.Online().Count());
         }
 
         private string Transform(string message, out HashSet<string> extractedUrls)
